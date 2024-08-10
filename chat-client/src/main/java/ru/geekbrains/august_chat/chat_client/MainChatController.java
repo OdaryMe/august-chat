@@ -56,7 +56,7 @@ public class MainChatController implements Initializable {
         if(selectedItem != null) {
             prefix = "to " + selectedItem + ": ";
         }
-        mainChatArea.appendText(prefix + 1 + System.lineSeparator());
+        mainChatArea.appendText(prefix + 2 + System.lineSeparator());
         inputField.clear();
     }
 
