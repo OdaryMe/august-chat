@@ -47,25 +47,23 @@ public class MainChatController implements Initializable {
 
     public void sendMessage(ActionEvent actionEvent) {
         var message = inputField.getText();
-        String prefix = "All: ";
-        var selectedItem = contactList.getSelectionModel().getSelectedItem();
-
         if(message.isBlank()) {
             return;
         }
-        if(selectedItem != null) {
-            prefix = "to " + selectedItem + ": ";
-        }
-        mainChatArea.appendText(prefix + 3 + System.lineSeparator());
+        var recipient = contactList.getSelectionModel().getSelectedItem();
+
+        mainChatArea.appendText(recipient + ": " + message + System.lineSeparator());
         inputField.clear();
     }
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         var contacts = new ArrayList<String>();
+        contacts.add("All");
         for (int i = 0; i < 10; i++) {
             contacts.add("Contact#" + (i + 1));
         }
         contactList.setItems(FXCollections.observableList(contacts));
+        contactList.getSelectionModel().selectFirst();
     }
 }
