@@ -12,7 +12,14 @@
             fx:controller="ru.geekbrains.august_chat.chat_client.MainChatController"
             prefHeight="400.0" prefWidth="600.0">
 
-    <VBox fx:id="mainChatPanel">
+    <VBox fx:id="loginPanel">
+        <Label text = "Login: "/>
+        <TextField fx:id="loginField"/>
+        <Label text = "Password: "/>
+        <PasswordField fx:id="passwordField"/>
+        <Button text="connect" onAction="#sendAuth"/>
+    </VBox>
+    <VBox fx:id="mainChatPanel" visible = "false">
         <MenuBar>
             <Menu text="File">
                 <MenuItem text="Connect" onAction="#connectToServer"/>
