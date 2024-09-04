@@ -6,6 +6,8 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class ClientHandler {
 
@@ -15,6 +17,9 @@ public class ClientHandler {
     private Thread handlerThread;
     private Server server;
     private String user;
+
+    int isAutorized = 0;
+    long authTimeout = 30000;
 
     public ClientHandler(Socket socket, Server server) {
         try {
@@ -43,20 +48,63 @@ public class ClientHandler {
         handlerThread.start();
     }
 
-    private void handleMessage(String message) {
+    private void handleMessage(String message) { //после второго кейса списано с урока, но методы не создавала
         var splitMessage = message.split(Server.REGEX);
-        switch (splitMessage[0]) {
-            case "/broadcast" :
-                server.broadcastMessage(user, splitMessage[1]);
-                break;
-            case "/private" :
-                server.privateMessage(user, splitMessage[1], splitMessage[2]);
-                break;
+        try {
+            switch (splitMessage[0]) {
+                case "/broadcast" :
+                    server.broadcastMessage(user, splitMessage[1]);
+                    break;
+                case "/private" :
+                    server.privateMessage(user, splitMessage[1], splitMessage[2]);
+                    break;
+                case "/change_nick" :
+                    String nick = server.getAuthService().changeNick(this.user, splitMessage[1]);
+                    server.removeAuthorizedClientFromList(this);
+                    this.user = nick;
+                    server.addAuthorizedClientToList(this);
+                    send("/change_nick_ok");
+                    break;
+                case "/change_pass" :
+                    server.getAuthService().changePassword(this.user, splitMessage[1], splitMessage[2]);
+                    send("/change_pass_ok");
+                    break;
+                case "/remove" :
+                    server.getAuthService().deleteUser(splitMessage[1], splitMessage[2]);
+                    this.socket.close();
+                    break;
+                case "/register" :
+                    server.getAuthService().createNewUser(splitMessage[1], splitMessage[2], splitMessage[3]);
+                    send("/register_ok");
+                    break;
+            }
+        } catch (IOException e) {
+            send("/error" + server.REGEX + e.getMessage());
         }
     }
 
+
+    private void authTimer() {
+        var timer = new Timer(true);
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                if (isAutorized == 0) {
+                    var response = "Too long time for connection";
+                    send("/error" + Server.REGEX + response);
+                    try {
+                        socket.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }, authTimeout);
+    }
+
+
     private void authorize() {
-        System.out.println("Authorizing");
+        authTimer();
         while (true) {
             try {
                 var message = in.readUTF();
@@ -81,6 +129,7 @@ public class ClientHandler {
                         this.user = nickname;
                         server.addAuthorizedClientToList(this);
                         send("/auth_ok" + Server.REGEX + nickname);
+                        isAutorized = 1;
                         break;
                     }
                 }
