@@ -1,19 +1,35 @@
 package ru.geekbrains.august_chat.chat_client;
 
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
-import javafx.scene.control.ListView;
-import javafx.scene.control.TextArea;
-import javafx.scene.control.TextField;
+import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
+import ru.geekbrains.august_chat.chat_client.network.MessageProcessor;
+import ru.geekbrains.august_chat.chat_client.network.NetworkService;
 
+import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.ResourceBundle;
 
-public class MainChatController implements Initializable {
+public class MainChatController implements Initializable, MessageProcessor {
+    public static final String REGEX = "%!%";
+
+    private String nick;
+    private NetworkService networkService;
+
+    @FXML
+    public VBox loginPanel;
+
+    @FXML
+    public TextField loginField;
+
+    @FXML
+    public PasswordField passwordField;
+
     @FXML
     public VBox mainChatPanel;
 
@@ -47,23 +63,83 @@ public class MainChatController implements Initializable {
 
     public void sendMessage(ActionEvent actionEvent) {
         var message = inputField.getText();
-        if(message.isBlank()) {
+        var recipient = contactList.getSelectionModel().getSelectedItem();
+        if (message.isBlank()) {
             return;
         }
-        var recipient = contactList.getSelectionModel().getSelectedItem();
-
-        mainChatArea.appendText(recipient + ": " + message + System.lineSeparator());
-        inputField.clear();
+        if (recipient.equals("All")) {
+            networkService.sendMessage("/broadcast" + REGEX + message);
+            inputField.clear();
+        } else {
+            networkService.sendMessage("/private" + REGEX + recipient + REGEX + message);
+            inputField.clear();
+        }
     }
+
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-        var contacts = new ArrayList<String>();
-        contacts.add("All");
-        for (int i = 0; i < 10; i++) {
-            contacts.add("Contact#" + (i + 1));
+        this.networkService = new NetworkService(this);
+    }
+
+    @Override
+    public void processMessage(String message) {
+        Platform.runLater(() -> parseIncomingMessage(message));
+    }
+
+    private void parseIncomingMessage(String message) {
+        var splitMessage = message.split(REGEX);
+        switch (splitMessage[0]) {
+            case "/auth_ok" :
+                this.nick = splitMessage[1];
+                loginPanel.setVisible(false);
+                mainChatPanel.setVisible(true);
+                break;
+            case "/broadcast" :
+                mainChatArea.appendText(splitMessage[1] + ": " + splitMessage[2] + System.lineSeparator());
+                break;
+                case "/private" :
+                mainChatArea.appendText(splitMessage[1] + " to " + splitMessage[2] + ": " + splitMessage[3] + System.lineSeparator());
+                break;
+            case "/error" :
+                showError(splitMessage[1]);
+                System.out.println("got error " + splitMessage[1]);
+                break;
+            case "/list" :
+                var contacts = new ArrayList<String>();
+                contacts.add("All");
+                for (int i = 1; i < splitMessage.length; i++) {
+                    contacts.add(splitMessage[i]);
+                }
+                contactList.setItems(FXCollections.observableList(contacts));
+                break;
         }
-        contactList.setItems(FXCollections.observableList(contacts));
-        contactList.getSelectionModel().selectFirst();
+    }
+
+    private static void showError(String message) {
+        var alert = new Alert(Alert.AlertType.ERROR,
+                "An error occurred: " + message,
+                ButtonType.OK);
+        alert.showAndWait();
+    }
+
+    public void sendAuth(ActionEvent actionEvent) {
+        var login = loginField.getText();
+        var password = passwordField.getText();
+        if (login.isBlank() || password.isBlank()) {
+            return;
+        }
+
+        var message = "/auth" + REGEX + login + REGEX + password;
+
+        if (!networkService.isConnected()) {
+            try {
+                networkService.connect();
+            } catch (IOException e) {
+                e.printStackTrace();
+                showError(e.getMessage());
+            }
+        }
+        networkService.sendMessage(message);
     }
 }
